@@ -9,7 +9,7 @@
 /boot			emmc	/dev/block/by-name/boot					flags=display="Boot";slotselect;backup;flashimg
 /vendor_boot		emmc	/dev/block/by-name/vendor_boot				flags=display="Vendor Boot";slotselect;backup;flashimg
 /init_boot		emmc	/dev/block/by-name/init_boot				flags=display="Init Boot";slotselect;backup;flashimg
-/dtbo			emmc	/dev/block/by-name/dtbo					flags=display="DTOB";slotselect;backup;flashimg
+/dtbo			emmc	/dev/block/by-name/dtbo					flags=display="DTBO";slotselect;backup;flashimg
 
 # Verified boot
 /vbmeta			emmc	/dev/block/by-name/vbmeta				flags=display="VBMeta";slotselect;backup;flashimg
