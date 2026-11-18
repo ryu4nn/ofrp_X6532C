@@ -98,8 +98,13 @@ TARGET_USERIMAGES_USE_EXT4 := true
 TARGET_USERIMAGES_USE_F2FS := true
 TARGET_USES_MKE2FS := true
 
-# Kernel modules shipped in the ramdisk (three lines: names, none, none)
-TW_LOAD_VENDOR_MODULES := $(shell cd $(DEVICE_PATH)/recovery/root/lib/modules && ls *.ko | tr '\n' ' ')
+# Kernel modules shipped in the ramdisk.
+# The value must be quoted: TWRP turns it into -DTW_LOAD_VENDOR_MODULES=<value>
+# and the flag is assembled into a shell command line, so an unquoted list is
+# split by the shell and every .ko after the first becomes a compiler input.
+TW_LOAD_VENDOR_MODULES := "$(shell cd $(DEVICE_PATH)/recovery/root/lib/modules && echo *.ko)"
+TW_LOAD_VENDOR_MODULES_EXCLUDE_GKI := true
+TW_LOAD_VENDOR_BOOT_MODULES := true
 
 # Verified boot. Stock vendor_boot carries an unsigned hash footer
 # (avbtool: Algorithm NONE) and vbmeta_b has flags=3 (verification and
