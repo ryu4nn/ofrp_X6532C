@@ -57,8 +57,12 @@ jobs:
         run: |
           git config --global user.name "gh-actions"
           git config --global user.email "gh-actions@users.noreply.github.com"
-          sudo fallocate -l 8G /swapfile || true
-          sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile || true
+          if ! swapon --show | grep -q .; then
+            sudo fallocate -l 8G /swapfile-extra
+            sudo chmod 600 /swapfile-extra
+            sudo mkswap /swapfile-extra && sudo swapon /swapfile-extra
+          fi
+          swapon --show || true
           free -h
 
       - name: Sync OrangeFox sources
@@ -92,6 +96,9 @@ jobs:
 
       - name: Build vendor_boot (recovery)
         run: |
+          # GitHub runs this with bash -eo pipefail; envsetup.sh returns non-zero
+          # at the end of sourcing, which would kill the step before lunch ever runs.
+          set +e
           set -o pipefail
           cd fox
           export ALLOW_MISSING_DEPENDENCIES=true
@@ -100,9 +107,23 @@ jobs:
           export FOX_AB_DEVICE=1
           export FOX_VIRTUAL_AB_DEVICE=1
           export FOX_VANILLA_BUILD=1
+
           source build/envsetup.sh
+          echo "envsetup rc=$?"
+
           lunch twrp_X6532C-eng
+          rc=$?
+          echo "lunch rc=$rc TARGET_PRODUCT=$TARGET_PRODUCT TARGET_DEVICE=$TARGET_DEVICE"
+          if [ $rc -ne 0 ] || [ -z "$TARGET_PRODUCT" ]; then
+            echo "=== available combos ==="
+            print_lunch_menu
+            exit 1
+          fi
+
           mka adbd vendorbootimage -j"$(nproc)" 2>&1 | tee build.log
+          rc=${PIPESTATUS[0]}
+          echo "mka rc=$rc"
+          exit $rc
 
       - name: Collect and validate
         if: success()
