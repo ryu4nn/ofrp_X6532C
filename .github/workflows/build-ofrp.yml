@@ -1,0 +1,155 @@
+name: Build OrangeFox for X6532C
+
+on:
+  workflow_dispatch:
+    inputs:
+      fox_branch:
+        description: "OrangeFox manifest branch"
+        required: true
+        default: "12.1"
+        type: choice
+        options: ["12.1", "14.1"]
+      enable_crypto:
+        description: "Enable FBE decryption (TW_INCLUDE_CRYPTO)"
+        required: true
+        default: false
+        type: boolean
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: ofrp-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+    steps:
+      - name: Checkout device tree
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /opt/hostedtoolcache/CodeQL /usr/local/share/boost \
+                      /usr/local/lib/node_modules /opt/az /usr/share/swift
+          sudo apt-get clean
+          df -h /
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            bc bison build-essential curl flex g++-multilib gcc-multilib git gnupg \
+            gperf imagemagick lib32ncurses-dev lib32readline-dev lib32z1-dev \
+            libelf-dev liblz4-tool libncurses-dev libsdl1.2-dev libssl-dev \
+            libxml2 libxml2-utils lzop patch pngcrush rsync schedtool \
+            squashfs-tools xsltproc zip zlib1g-dev openjdk-11-jdk python3 \
+            python-is-python3
+          mkdir -p "$HOME/bin"
+          curl -sSL https://storage.googleapis.com/git-repo-downloads/repo > "$HOME/bin/repo"
+          chmod a+x "$HOME/bin/repo"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+          java -version
+
+      - name: Configure git and swap
+        run: |
+          git config --global user.name "gh-actions"
+          git config --global user.email "gh-actions@users.noreply.github.com"
+          sudo fallocate -l 8G /swapfile || true
+          sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile || true
+          free -h
+
+      - name: Sync OrangeFox sources
+        run: |
+          git clone --depth=1 https://gitlab.com/OrangeFox/sync.git foxsync
+          cd foxsync
+          for attempt in 1 2 3; do
+            echo "=== sync attempt $attempt ==="
+            ./orangefox_sync.sh --branch "${{ inputs.fox_branch || '12.1' }}" \
+                                --path "$GITHUB_WORKSPACE/fox" && break
+            echo "sync failed, retrying in 60s"
+            sleep 60
+          done
+          df -h /
+
+      - name: Install device tree
+        run: |
+          mkdir -p fox/device/infinix
+          cp -a device/infinix/X6532C fox/device/infinix/
+          test -f fox/device/infinix/X6532C/BoardConfig.mk
+          ls fox/device/infinix/X6532C/prebuilt/
+
+      - name: Enable crypto (optional)
+        if: ${{ inputs.enable_crypto }}
+        run: |
+          sed -i 's|^#TW_INCLUDE_CRYPTO := true|TW_INCLUDE_CRYPTO := true|' \
+                 fox/device/infinix/X6532C/BoardConfig.mk
+          sed -i 's|^#TW_INCLUDE_CRYPTO_FBE := true|TW_INCLUDE_CRYPTO_FBE := true|' \
+                 fox/device/infinix/X6532C/BoardConfig.mk
+          grep TW_INCLUDE_CRYPTO fox/device/infinix/X6532C/BoardConfig.mk
+
+      - name: Build vendor_boot (recovery)
+        run: |
+          set -o pipefail
+          cd fox
+          export ALLOW_MISSING_DEPENDENCIES=true
+          export LC_ALL=C
+          export FOX_BUILD_DEVICE=X6532C
+          export FOX_AB_DEVICE=1
+          export FOX_VIRTUAL_AB_DEVICE=1
+          export FOX_VANILLA_BUILD=1
+          source build/envsetup.sh
+          lunch twrp_X6532C-eng
+          mka adbd vendorbootimage -j"$(nproc)" 2>&1 | tee build.log
+
+      - name: Collect and validate
+        if: success()
+        run: |
+          OUT=fox/out/target/product/X6532C
+          mkdir -p artifacts
+          for f in vendor_boot.img recovery.img boot.img; do
+            [ -f "$OUT/$f" ] && cp "$OUT/$f" artifacts/ || true
+          done
+          cp fox/build.log artifacts/build.log || true
+          python3 - <<'PY'
+          import glob, hashlib, os, struct
+          lines = []
+          for path in sorted(glob.glob("artifacts/*.img")):
+              data = open(path, "rb").read()
+              magic = data[:8].decode("ascii", "replace")
+              size = len(data)
+              limit = 67108864 if "vendor_boot" in path else None
+              lines.append(f"{os.path.basename(path)}: magic={magic!r} size={size}")
+              if limit and size > limit:
+                  raise SystemExit(f"FAIL {path} exceeds partition size {limit}")
+              if "vendor_boot" in path and magic != "VNDRBOOT":
+                  raise SystemExit(f"FAIL {path} is not a vendor_boot image")
+          if not lines:
+              raise SystemExit("FAIL no image produced")
+          sha = []
+          for path in sorted(glob.glob("artifacts/*")):
+              h = hashlib.sha256(open(path, "rb").read()).hexdigest()
+              sha.append(f"{h}  {os.path.basename(path)}")
+          open("artifacts/SHA256SUMS", "w").write("\n".join(sha) + "\n")
+          info = "\n".join(lines) + "\n\n" + "\n".join(sha) + "\n"
+          open("artifacts/build-info.txt", "w").write(info)
+          print(info)
+          PY
+
+      - name: Upload artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: OrangeFox-X6532C-${{ github.run_number }}
+          path: artifacts/*
+          if-no-files-found: error
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ github.run_number }}
+          path: fox/build.log
+          if-no-files-found: ignore
