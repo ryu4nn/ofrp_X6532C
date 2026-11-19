@@ -29,11 +29,20 @@ device/infinix/X6532C/
 ├── system.prop               getprop dari HP
 ├── prebuilt/dtb.img          dari vendor_boot (sha256 5f2bd3de…)
 └── recovery/root/
-    ├── init.recovery.mt6765.rc      dari vendor_boot HP
+    ├── init.recovery.mt6765.rc      dari vendor_boot HP + import init.decrypt.rc
+    ├── init.decrypt.rc              start Trustonic TEE, keymaster, gatekeeper
     ├── first_stage_ramdisk/fstab.mt6765
     ├── lib/modules/*.ko            156 modul, vermagic 5.10.237 (dari HP)
+    ├── vendor/                      service keymaster/gatekeeper + libs + TA (32-bit)
     └── system/etc/{recovery.fstab,twrp.flags}
 ```
+
+`vendor/` berisi binary dan library asli dari partisi `/vendor` HP ini (keymaster
+4.1 Trustonic, gatekeeper 1.0, keymaster_attestation 1.1, `mcDriverDaemon`,
+`libMcClient`, registry TA Trustonic). TWRP hanya me-mount `/vendor` asli saat
+membaca prop lalu melepasnya sebelum dekripsi, jadi stack TEE harus ikut di
+ramdisk. `mcDrvModule.ko` + `gpapi.ko` di-`insmod` dari `init.decrypt.rc` karena
+loader modul TWRP baru jalan setelah init.
 
 `recovery.fstab` dan `twrp.flags` ditulis tangan, diturunkan dari fstab stock tetapi **dikoreksi**:
 
@@ -66,7 +75,7 @@ tools/extract_from_device.sh dump/vendor_boot_b.img
 
 2. Buka tab **Actions** → **Build OrangeFox for X6532C** → **Run workflow**.
    - `fox_branch`: `12.1` (sesuai Android 12.1, jangan pilih 14.1 untuk device ini)
-   - `enable_crypto`: `false` untuk build pertama
+   - Dekripsi FBE selalu aktif (`TW_INCLUDE_CRYPTO := true` di `BoardConfig.mk`).
 
 3. Tunggu. Sync sumber OrangeFox ±45 GB (30–60 menit), build 40–90 menit. Hasil ada di **Artifacts**: `vendor_boot.img`, `build-info.txt`, `SHA256SUMS`.
 
@@ -109,6 +118,8 @@ fastboot reboot recovery
 
 - Flash **hanya ke slot aktif**. Kalau slot aktif `a`, pakai `fastboot flash vendor_boot_a`.
 - Jangan sentuh `boot`, `init_boot`, `preloader`, `seccfg`, `nvram`, `nvdata`, `persist`.
+- Setelah masuk TWRP, cek `adb shell mount | grep ' /data '` — kalau `/data`
+  muncul sebagai f2fs (bukan kosong), dekripsi FBE berhasil.
 
 Rollback:
 
@@ -121,8 +132,16 @@ Kalau sampai tidak bisa masuk fastboot: tekan **Volume Up + Power** (mode recove
 
 ## Status / yang belum
 
-- Build pertama tanpa dekripsi FBE. `/data` akan terlihat kosong di recovery; flashing ROM/zip, backup boot/vendor_boot, fastbootd, dan mount MicroSD tetap jalan.
-- `enable_crypto: true` menyalakan `TW_INCLUDE_CRYPTO` + `TW_INCLUDE_CRYPTO_FBE`. Keymaster di device ini 32-bit (`ro.hardware.gatekeeper=trustonic`), jadi ini perlu iterasi; kalau gagal boot, kembali ke build tanpa crypto.
+- Dekripsi FBE v2 + metadata (`/metadata` di `md_udc`, keydirectory
+  `/metadata/vold/metadata_encryption`) memakai keymaster 4.1 Trustonic yang
+  dijalankan dari ramdisk. `/data` seharusnya langsung ter-mount tanpa password
+  karena kuncinya di-unwrap lewat TEE, bukan PIN layar.
+- Kalau `/data` tetap tidak ter-mount, cek dari `adb shell` di recovery:
+  `ls -l /dev/mobicore*`, `ps -A | grep -E "mobicore|keymaster|gatekeeper|keystore2"`,
+  `getprop | grep -i crypto`, dan `logcat -d | grep -iE "keymaster|gatekeeper|mobicore|keystore|fscrypt"`.
+- Normal boot Android tidak terpengaruh: `first_stage_ramdisk/fstab.mt6765` dan
+  modul di ramdisk tetap milik stock, dan partisi `/vendor` asli menutupi
+  `vendor/` milik ramdisk saat Android boot.
 - Vibrasi kemungkinan tidak jalan (`regulator-vibrator.ko` termuat, tapi TWRP butuh `TW_NO_HAPTICS` bila crash).
 - Kalau layar mati total saat recovery boot: itu tanda modul panel tidak termuat. Cek `lib/modules/modules.load.recovery` dan pastikan memakai modul dari HP ini, bukan dari firmware lain.
 
