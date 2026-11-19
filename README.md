@@ -4,6 +4,16 @@ Device tree OrangeFox Recovery untuk **Infinix Smart 9 HD / X6532C**, MediaTek M
 
 > Bukan untuk Infinix Smart 9 (X6532) — itu Helio G81 / MT6769Z, chipset dan layout partisinya beda.
 
+## Image siap pakai
+
+Build dengan dekripsi FBE/metadata (Trustonic TEE) tersedia di
+[release `ofrp-12.1-crypto-v1`](https://github.com/rynekoo/X6532C-orangefox/releases/tag/ofrp-12.1-crypto-v1):
+
+```
+vendor_boot.img  67.108.864 byte (64 MiB persis)
+sha256 c2696090f36593fc784d0ab42957a63acbce691fc1b025f7991de59999000063
+```
+
 ## Kenapa recovery masuk ke `vendor_boot`
 
 HP ini tidak punya partisi `recovery`. Firmware aslinya menaruh seluruh resource recovery di dalam **vendor ramdisk** pada partisi `vendor_boot`:
