@@ -112,12 +112,16 @@ TW_LOAD_VENDOR_BOOT_MODULES := true
 BOARD_AVB_ENABLE := true
 BOARD_AVB_ALGORITHM := NONE
 
-# Crypto is off in the baseline build. The vendor vold + keymaster HALs on
-# this device are 32-bit and need a working keydirectory mount first.
-# The workflow flips these on when "enable_crypto" is selected.
-#TW_INCLUDE_CRYPTO := true
-#TW_INCLUDE_CRYPTO_FBE := true
-#TW_USE_FSCRYPT_POLICY := 2
+# FBE + metadata decryption. /data is f2fs with
+# fileencryption=aes-256-xts:aes-256-cts:v2 and
+# keydirectory=/metadata/vold/metadata_encryption; /metadata (md_udc) is
+# wrappedkey, so the keys are sealed by the Trustonic TEE. The 32-bit keymaster
+# stack that unwraps them is shipped in recovery/root/vendor and started by
+# recovery/root/init.decrypt.rc, because TWRP unmounts the real /vendor before
+# decrypting.
+TW_INCLUDE_CRYPTO := true
+TW_INCLUDE_CRYPTO_FBE := true
+TW_USE_FSCRYPT_POLICY := 2
 
 # VNDK
 BOARD_VNDK_VERSION := current

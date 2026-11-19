@@ -9,11 +9,6 @@ on:
         default: "12.1"
         type: choice
         options: ["12.1", "14.1"]
-      enable_crypto:
-        description: "Enable FBE decryption (TW_INCLUDE_CRYPTO)"
-        required: true
-        default: false
-        type: boolean
   push:
     tags: ["v*"]
 
@@ -84,15 +79,6 @@ jobs:
           cp -a device/infinix/X6532C fox/device/infinix/
           test -f fox/device/infinix/X6532C/BoardConfig.mk
           ls fox/device/infinix/X6532C/prebuilt/
-
-      - name: Enable crypto (optional)
-        if: ${{ inputs.enable_crypto }}
-        run: |
-          sed -i 's|^#TW_INCLUDE_CRYPTO := true|TW_INCLUDE_CRYPTO := true|' \
-                 fox/device/infinix/X6532C/BoardConfig.mk
-          sed -i 's|^#TW_INCLUDE_CRYPTO_FBE := true|TW_INCLUDE_CRYPTO_FBE := true|' \
-                 fox/device/infinix/X6532C/BoardConfig.mk
-          grep TW_INCLUDE_CRYPTO fox/device/infinix/X6532C/BoardConfig.mk
 
       - name: Build vendor_boot (recovery)
         run: |
