@@ -107,28 +107,72 @@ tools/repack_vendor_boot.sh dump/vendor_boot_b.img \
 ## Flashing
 
 > Sebelum flash, pastikan punya dump `boot_a`, `boot_b`, `vendor_boot_a`, `vendor_boot_b`, `vbmeta_a`, `vbmeta_b`. Sudah ada di `dump/`.
+>
+> Slot aktif HP ini **b**. Image hanya boleh masuk ke `vendor_boot_b`.
+> Jangan sentuh `boot`, `init_boot`, `preloader`, `seccfg`, `nvram`, `nvdata`,
+> `persist`; Magisk Kitsune ada di `boot` dan tidak perlu diubah.
+
+Vendor_boot slot b punya `AVB flags=3` (verification + hashtree dimatikan), jadi
+image tidak perlu ditandatangani ulang dan `vbmeta` tidak perlu diflash.
+
+### Cara 1 — fastboot
 
 ```bash
 adb reboot bootloader
 fastboot devices
 fastboot getvar current-slot          # harus b
-fastboot flash vendor_boot vendor_boot.img
+fastboot flash vendor_boot_b vendor_boot.img
 fastboot reboot recovery
 ```
 
-- Flash **hanya ke slot aktif**. Kalau slot aktif `a`, pakai `fastboot flash vendor_boot_a`.
-- Jangan sentuh `boot`, `init_boot`, `preloader`, `seccfg`, `nvram`, `nvdata`, `persist`.
-- Setelah masuk TWRP, cek `adb shell mount | grep ' /data '` — kalau `/data`
-  muncul sebagai f2fs (bukan kosong), dekripsi FBE berhasil.
+Kalau `fastboot flash` ditolak (`not allowed in locked state`), jangan paksa
+unlock (unlock menghapus data). Pakai cara 2.
 
-Rollback:
+### Cara 2 — dd dari root (tanpa fastboot, tanpa unlock)
+
+Boot normal ke Android, sambungkan adb, lalu:
 
 ```bash
-fastboot flash vendor_boot dump/vendor_boot_b.img
-fastboot reboot
+adb push vendor_boot.img /data/local/tmp/vendor_boot.img
+adb shell
+su
+sha256sum /data/local/tmp/vendor_boot.img     # harus sama dengan SHA256SUMS
+dd if=/data/local/tmp/vendor_boot.img of=/dev/block/by-name/vendor_boot_b bs=1M
+sync
+sha256sum /dev/block/by-name/vendor_boot_b    # verifikasi tulis
+reboot recovery
 ```
 
-Kalau sampai tidak bisa masuk fastboot: tekan **Volume Up + Power** (mode recovery/preloader), lalu pulihkan lewat SP Flash Tool dengan firmware resmi X6532C. Itu sebabnya dump partisi disimpan dulu.
+Tidak ada partisi lain yang ditulis. Kalau `sha256sum` hasil baca berbeda,
+tulis ulang sebelum reboot.
+
+### Setelah masuk TWRP
+
+```bash
+adb shell mount | grep ' /data '     # harus f2fs, bukan kosong
+adb shell ls /sdcard                 # isi /data/media harus terlihat
+adb shell ps -A | grep -E 'mobicore|keymaster|gatekeeper|keystore2'
+```
+
+Kalau `/data` belum ter-mount, kirim output:
+`logcat -d | grep -iE 'keymaster|gatekeeper|mobicore|keystore|fscrypt'`,
+`dmesg | grep -iE 'mobicore|mcDrv'`, dan `getprop | grep -i crypto`.
+
+### Rollback
+
+```bash
+# fastboot
+fastboot flash vendor_boot_b dump/vendor_boot_b.img
+fastboot reboot
+
+# atau dd dari root
+dd if=/data/local/tmp/vendor_boot_b_stock.img of=/dev/block/by-name/vendor_boot_b bs=1M
+sync && reboot
+```
+
+Kalau sampai tidak bisa masuk fastboot/Android: tekan **Volume Up + Power**
+(mode recovery/preloader), lalu pulihkan lewat SP Flash Tool dengan firmware
+resmi X6532C. Itu sebabnya dump partisi disimpan dulu.
 
 ## Status / yang belum
 
