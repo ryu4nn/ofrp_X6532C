@@ -20,19 +20,22 @@
 # are skipped by mcDriverDaemon, exactly as on a stock boot.
 
 on init
+    # init's mkdir does not create parents; /mnt/vendor is not in the ramdisk.
+    mkdir /mnt 0755 root root
+    mkdir /mnt/vendor 0771 system system
     mkdir /mnt/vendor/persist 0771 system system
-
-# Stock mounts /persist at /mnt/vendor/persist and passes that path to
-# mcDriverDaemon as --P1. Recovery's fstab also mounts persist there, but
-# init reaches this point first.
-on early-fs
-    mount ext4 /dev/block/by-name/persist /mnt/vendor/persist rw
 
 on post-fs
     # TWRP's own init.rc exports only the 64-bit paths; this device is 32-bit.
     # Exporting here (rather than in on init) wins because init.rc's export
     # runs after this file's on init section.
     export LD_LIBRARY_PATH /system/lib:/vendor/lib:/vendor/lib/hw
+
+    # Stock mounts /persist at /mnt/vendor/persist and passes that path to
+    # mcDriverDaemon as --P1. Recovery's init.rc has no mount_all, so mount it
+    # here after ueventd has had time to publish the by-name node.
+    exec -- /system/bin/sh -c "for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do [ -e /dev/block/by-name/persist ] && exit 0; sleep 0.2; done"
+    mount ext4 /dev/block/by-name/persist /mnt/vendor/persist rw
 
     chown system system /mnt/vendor/persist
     chmod 0771 /mnt/vendor/persist
@@ -54,7 +57,7 @@ on post-fs
     # which is after this point; mcDriverDaemon needs /dev/mobicore now.
     exec -- /system/bin/insmod /lib/modules/gpapi.ko
     exec -- /system/bin/insmod /lib/modules/mcDrvModule.ko
-    exec -- /system/bin/sh -c "for i in 1 2 3 4 5 6 7 8 9 10; do [ -e /dev/mobicore ] && exit 0; sleep 0.2; done"
+    exec -- /system/bin/sh -c "for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do [ -e /dev/mobicore ] && exit 0; sleep 0.2; done"
 
     # /vendor/etc/ueventd.rc carries these modes on a normal boot, but
     # ueventd runs before the real /vendor is mounted in recovery, so ueventd.rc
