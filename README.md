@@ -7,7 +7,7 @@ Device tree OrangeFox Recovery untuk **Infinix Smart 9 HD / X6532C**, MediaTek M
 ## Image siap pakai
 
 Build dengan dekripsi FBE/metadata (Trustonic TEE) tersedia di
-[release `ofrp-12.1-crypto-v1`](https://github.com/ryu4nn/X6532C-orangefox/releases/tag/ofrp-12.1-crypto-v1):
+[release `ofrp-12.1-crypto-v1`](https://github.com/ryu4nn/ofrp_X6532C/releases/tag/ofrp-12.1-crypto-v1):
 
 ```
 vendor_boot.img  67.108.864 byte (64 MiB persis)
