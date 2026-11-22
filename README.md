@@ -50,7 +50,10 @@ device/infinix/X6532C/
     ├── first_stage_ramdisk/fstab.mt6765
     ├── lib/modules/*.ko            156 modules, vermagic 5.10.237 (from the device)
     ├── vendor/                     keymaster/gatekeeper services + libs + TA (32-bit)
-    └── system/etc/{recovery.fstab,twrp.flags}
+    │   └── etc/vintf/manifest.xml   stock vendor HAL manifest (keymaster 4.1, gatekeeper 1.0)
+    └── system/etc/
+        ├── recovery.fstab, twrp.flags
+        └── vintf/manifest.xml       AOSP framework HAL manifest
 ```
 
 `vendor/` holds the original binaries and libraries from this device's `/vendor`
@@ -59,6 +62,17 @@ partition (Trustonic keymaster 4.1, gatekeeper 1.0, keymaster_attestation 1.1,
 real `/vendor` long enough to read props and unmounts it before decryption, so the
 TEE stack has to ship in the ramdisk. `mcDrvModule.ko` and `gpapi.ko` are
 `insmod`ed from `init.decrypt.rc` because TWRP's module loader runs after init.
+
+`vendor/etc/vintf/manifest.xml` is the stock vendor HAL manifest, copied verbatim.
+It is required, not decorative: this recovery is built with
+`PRODUCT_ENFORCE_VINTF_MANIFEST`, so `libhidlbase` compiles in
+`registerAsServiceInternal()`'s check and **refuses to register any HIDL service
+that is not declared as `hwbinder` in the VINTF manifest**. TWRP only mounts the
+real `/vendor` after init has already started the HALs, so without the manifest
+the keymaster and gatekeeper services fail to register, metadata decryption has
+no TEE backend and `/data` never mounts. The same reason applies to
+`system/etc/vintf/manifest.xml` for framework HALs; the recovery's own
+health/boot fragments come from TWRP's prebuilts.
 
 `recovery.fstab` and `twrp.flags` are hand-written, derived from the stock fstab
 but **corrected**:
