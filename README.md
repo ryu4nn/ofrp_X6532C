@@ -9,12 +9,16 @@ MT6765, Android 12 (Go), A/B + Virtual A/B.
 ## Ready-made image
 
 A build with FBE / metadata decryption (Trustonic TEE) is available in the
-[`ofrp-12.1-crypto-v1` release](https://github.com/ryu4nn/ofrp_X6532C/releases/tag/ofrp-12.1-crypto-v1):
+[`ofrp-12.1-crypto-v2` release](https://github.com/ryu4nn/ofrp_X6532C/releases/tag/ofrp-12.1-crypto-v2):
 
 ```
 vendor_boot.img  67,108,864 bytes (exactly 64 MiB)
-sha256 c2696090f36593fc784d0ab42957a63acbce691fc1b025f7991de59999000063
+sha256 c97427019e42d0abfc4329d294b4363dec84e1f800f9a228e461b4da622dd9c8
 ```
+
+v2 is v1 plus the VINTF manifests below; v1 booted, but `hwservicemanager` started
+before TWRP mounted the real `/vendor`, found no device manifest and rejected the
+keymaster/gatekeeper registrations, so metadata decryption had no TEE backend.
 
 ## Why recovery lives in `vendor_boot`
 
